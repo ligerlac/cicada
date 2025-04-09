@@ -276,22 +276,48 @@ class Draw:
         plt.legend()
         self._save_fig(name)
 
+
     def plot_anomaly_score_distribution(
-        self, scores: List[npt.NDArray], labels: List[str], name: str
+        self, scores: List[npt.NDArray], labels: List[str], name: str, xlabel=r"Anomaly Score", do_double_col=False
     ):
+        hs = {}
         for score, label in zip(scores, labels):
-            plt.hist(
+            _,_, hs[label] = plt.hist(
                 score.reshape((-1)),
-                bins=100,
-                range=(0, 256),
+                bins=range(0, 259, 3),
                 density=1,
-                label=label,
+                label=f"{label} ({np.mean(score):.1f})",
                 log=True,
                 histtype="step",
+                linewidth=2,
             )
-        plt.xlabel(r"Anomaly Score")
-        plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
-        self._save_fig(name)
+
+        plt.xlabel(xlabel)
+        plt.ylabel("a.u.")
+        ax = plt.gca()
+
+        if do_double_col:
+
+            signal_keys, data_keys = [], []
+            for k in hs.keys():
+                if 'ZB' in k or 'Zero Bias' in k:
+                    data_keys.append(k)
+                else:
+                    signal_keys.append(k)
+                
+            l1 = ax.legend(handles=[hs[k][0] for k in signal_keys], loc="upper right", bbox_to_anchor=(1.0, 1.0))
+            l2 = ax.legend(handles=[hs[k][0] for k in data_keys], loc="upper left", bbox_to_anchor=(0.0, 1.0), labelspacing=0.3)
+            ax.add_artist(l1)
+            ax.add_artist(l2)
+        else:
+            plt.legend(loc="upper right")
+        ax.set_ylim(0.0000005, 2)
+        ax.set_xticks(range(0, 280, 32))    
+                
+        hep.cms.text('Preliminary', loc=0)
+        hep.cms.lumitext(r'2024 (13.6 TeV)')
+        
+        self._save_fig(name)        
 
 
     def plot_roc_curve(
