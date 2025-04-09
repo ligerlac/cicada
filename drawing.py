@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import List, Callable
 
-import hls4ml
 import matplotlib.pyplot as plt
 import mplhep as hep
 import numpy as np
@@ -426,6 +425,7 @@ class Draw:
         self._save_fig(f'compilation-error-dist-{name}')
 
     def plot_cpp_model(self, hls_model, name: str):
+        import hls4ml
         hls4ml.utils.plot_model(
             hls_model,
             show_shapes=True,
