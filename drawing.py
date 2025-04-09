@@ -293,70 +293,94 @@ class Draw:
         plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         self._save_fig(name)
 
+
     def plot_roc_curve(
         self,
         y_trues: List[npt.NDArray],
         y_preds: List[npt.NDArray],
         labels: List[str],
-        inputs: List[npt.NDArray],
         name: str,
+        y_preds_baseline: List[npt.NDArray] = None,
         cv: int = 3,
-        baseline: str = 'mean'
+        xlabel: str = "Trigger Rate [kHz]",
+        ylabel: str = "Signal Efficiency",
+        calc_error: bool = False,
+        main_name: str = "CICADA",
+        baseline_name: str = "Baseline",
     ):
-        skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=42)
-        base_line_alg = {
-            'mean': lambda x: np.mean(x**2, axis=(1, 2)),
-            'max': lambda x: np.max(x**2, axis=(1, 2))
-        }[baseline]
-        for y_true, y_pred, label, color, d in zip(
-            y_trues, y_preds, labels, self.cmap, inputs
-        ):
-            aucs = []
-            for _, indices in skf.split(y_pred, y_true):
-                fpr, tpr, _ = roc_curve(y_true[indices], y_pred[indices])
-                aucs.append(auc(fpr, tpr))
-            std_auc = np.std(aucs)
 
-            fpr, tpr, _ = roc_curve(y_true, y_pred)
-            roc_auc = auc(fpr, tpr)
-            fpr_base, tpr_base, _ = roc_curve(y_true, base_line_alg(d))
+        skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=42)
+        for i, (y_true, y_pred, label, color) in enumerate(zip(
+            y_trues, y_preds, labels, self.cmap
+        )):
+            fpr, tpr, _ = roc_curve(y_true, y_pred, drop_intermediate=False)
+
+            if calc_error:
+                aucs = []
+                for _, indices in skf.split(y_pred, y_true):
+                    fpr_, tpr_, _ = roc_curve(y_true[indices], y_pred[indices])
+                    aucs.append(auc(fpr_, tpr_))
+                std_auc = np.std(aucs)
+                label = rf"{label} (AUC ={np.mean(aucs): .2f} $\pm$ {std_auc: .2f})"
+            else:
+                roc_auc = auc(fpr, tpr)
+                label = rf"{label} (AUC ={roc_auc: .2f})"
 
             plt.plot(
-                fpr * 28.61,
+                fpr * 28610,
                 tpr,
                 linestyle="-",
-                lw=1.5,
+                lw=2,
                 color=color,
                 alpha=0.8,
-                label=rf"{label} (AUC = {roc_auc: .4f} $\pm$ {std_auc: .4f})",
+                label=label,
             )
 
-            plt.plot(
-                fpr_base * 28.61,
-                tpr_base,
-                linestyle="--",
-                lw=1.0,
-                color=color,
-                alpha=0.5,
-                label=rf"{label}, Baseline",
-            )
+            if y_preds_baseline is not None:
+                fpr_base, tpr_base, _ = roc_curve(y_true, y_preds_baseline[i])
+                plt.plot(
+                    fpr_base * 28610,
+                    tpr_base,
+                    linestyle="--",
+                    lw=1.0,
+                    color=color,
+                    alpha=0.5,
+                )
 
-        plt.plot(
-            [0.003, 0.003],
-            [0, 1],
-            linestyle="--",
-            lw=1,
-            color="black",
-            label="3 kHz",
-        )
-        plt.xlim([0.0002861, 28.61])
-        plt.ylim([0.01, 1.0])
+        # grey vertical line at envisioned trigger rate
+        # plt.plot(
+        #     [3, 3],
+        #     [0, 1],
+        #     linestyle="--",
+        #     lw=1,
+        #     color="black",
+        #     label="3 kHz",
+        # )
+
+        plt.xlim([0.2, 100])
+        plt.ylim([0.001, 1.1])
         plt.xscale("log")
         plt.yscale("log")
-        plt.xlabel("Trigger Rate (MHz)")
-        plt.ylabel("Signal Efficiency")
-        plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+
+        first_legend = plt.legend(loc='lower right')
+        plt.gca().add_artist(first_legend)
+    
+        # Add second legend (styles in grey)
+        style_handles = [
+            Line2D([0], [0], color='grey', linestyle='-', lw=2, alpha=0.6),
+            Line2D([0], [0], color='grey', linestyle='--', lw=2, alpha=0.6)
+        ]
+        style_labels = [main_name, baseline_name]
+
+        plt.legend(style_handles, style_labels, loc='upper left')
+    
+        hep.cms.text('Preliminary', loc=0)
+        hep.cms.lumitext(r'2024 (13.6 TeV)')
+
         self._save_fig(name)
+
 
     def plot_compilation_error(
         self, scores_keras: npt.NDArray, scores_hls4ml: npt.NDArray, name: str
